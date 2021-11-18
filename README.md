@@ -1,5 +1,5 @@
 # Gamifier
-CS1470 Final Project
+Final Project for CS1470: Deep Learning
 # Introduction
 We aim to simplify the game design process using PolyGen (https://github.com/deepmind/deepmind-research/tree/master/polygen), an autoregressive model that takes in names of specific object classes and outputs the objects in 3D Mesh format, and channeling it to a Natural Language Processing model, which understands the spatial relationship among objects from texts and outputs the inferred positions of the objects in the scene as 3D coordinates. We propose a model that combines relevant features of PolyGen and the NLP model to generate scenes as 3D meshes from text descriptions. We nicknamed this model Gamifier, as we believe it will simplify the game design process and unlock a range of potential applications in 3D scene creation, augmented reality, and virtual reality.
 
