@@ -1,10 +1,8 @@
 # Gamifier: Deep 3D Mesh Generation for Game Design
 _This is a tentative outline for CS1470 Deep Learning final project._
 
-
-![Screen Shot 2021-11-18 at 12 31 21 AM](https://user-images.githubusercontent.com/75775661/142388967-924ad6fb-c21a-4efb-93fd-f064cd374c82.jpg)
+![Screen Shot 2021-11-18 at 12 31 21 AM](https://user-images.githubusercontent.com/75775661/142389456-482fb9e6-b2db-4ae2-8afa-21f90187f5e1.jpg)
          _Concept art by Ahmed Ali on Behance, https://www.behance.net/ahmedalicubed_
-
 
 # Introduction
 We aim to simplify the game design process with the Gamifier model, which combines relevant features of PolyGen and BERT to generate 3D scenes as meshes from text descriptions. We will implement PolyGen (https://github.com/deepmind/deepmind-research/tree/master/polygen), an autoregressive model that takes in names of specific object classes and outputs the objects in 3D Mesh format, and channel it to a Natural Language Processing model, which understands the spatial relationship among objects from texts and outputs the inferred positions of the objects in the scene as 3D coordinates. Combining these two models, we nicknamed the new umbrella model Gamifier, as we believe it will simplify the game design process and unlock a range of potential applications in 3D scene creation, augmented reality, and virtual reality.
