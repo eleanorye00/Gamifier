@@ -24,88 +24,109 @@ import tensorflow.compat.v1 as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 
+import torch
+
 
 def random_shift(vertices, shift_factor=0.25):
-  """Apply random shift to vertices."""
-  max_shift_pos = tf.cast(255 - tf.reduce_max(vertices, axis=0), tf.float32)
-  max_shift_pos = tf.maximum(max_shift_pos, 1e-9)
+    """Apply random shift to vertices."""
+    max_shift_pos = 255 - torch.max(vertices, dim=0)
+    max_shift_pos = max_shift_pos.type(torch.DoubleTensor)
+    max_shift_pos = torch.maximum(max_shift_pos, 1e-9)
 
-  max_shift_neg = tf.cast(tf.reduce_min(vertices, axis=0), tf.float32)
-  max_shift_neg = tf.maximum(max_shift_neg, 1e-9)
+    max_shift_neg = torch.min(vertices, dim=0)
+    max_shift_neg = max_shift_neg.type(torch.DoubleTensor)
+    max_shift_neg = torch.maximum(max_shift_neg, 1e-9)
 
-  shift = tfd.TruncatedNormal(
-      tf.zeros([1, 3]), shift_factor*255, -max_shift_neg,
-      max_shift_pos).sample()
-  shift = tf.cast(shift, tf.int32)
-  vertices += shift
-  return vertices
+    shift = torch.distributions.Normal(torch.zeros([1, 3]), shift_factor * 255,
+                                       -max_shift_neg, max_shift_pos).sample()
+    shift = shift.type(torch.DoubleTensor)
+    vertices += shift
+    return vertices
 
 
 def make_vertex_model_dataset(ds, apply_random_shift=False):
-  """Prepare dataset for vertex model training."""
-  def _vertex_model_map_fn(example):
-    vertices = example['vertices']
+    """[Done] Prepare dataset for vertex model training."""
 
-    # Randomly shift vertices
-    if apply_random_shift:
-      vertices = random_shift(vertices)
+    def _vertex_model_map_fn(example):
+        vertices = example['vertices']
 
-    # Re-order vertex coordinates as (z, y, x).
-    vertices_permuted = tf.stack(
-        [vertices[:, 2], vertices[:, 1], vertices[:, 0]], axis=-1)
+        # Randomly shift vertices
+        if apply_random_shift:
+            vertices = random_shift(vertices)
 
-    # Flatten quantized vertices, reindex starting from 1, and pad with a
-    # zero stopping token.
-    vertices_flat = tf.reshape(vertices_permuted, [-1])
-    example['vertices_flat'] = tf.pad(vertices_flat + 1, [[0, 1]])
+        # Re-order vertex coordinates as (z, y, x).
+        vertices_permuted = torch.stack(
+            [vertices[:, 2], vertices[:, 1], vertices[:, 0]], dim=-1)
 
-    # Create mask to indicate valid tokens after padding and batching.
-    example['vertices_flat_mask'] = tf.ones_like(
-        example['vertices_flat'], dtype=tf.float32)
-    return example
-  return ds.map(_vertex_model_map_fn)
+        # Flatten quantized vertices, reindex starting from 1, and pad with a
+        # zero stopping token.
+        vertices_flat = torch.reshape(vertices_permuted, [-1])
+        example['vertices_flat'] = torch.nn.functional.pad(vertices_flat + 1, (0, 1))
+
+        # Create mask to indicate valid tokens after padding and batching.
+        example['vertices_flat_mask'] = torch.ones_like(
+            example['vertices_flat'], dtype=torch.float32)
+        return example
+
+    return ds.map(_vertex_model_map_fn)
 
 
 def make_face_model_dataset(
     ds, apply_random_shift=False, shuffle_vertices=True, quantization_bits=8):
-  """Prepare dataset for face model training."""
+  """[Done] Prepare dataset for face model training."""
   def _face_model_map_fn(example):
     vertices = example['vertices']
 
     # Randomly shift vertices
     if apply_random_shift:
       vertices = random_shift(vertices)
-    example['num_vertices'] = tf.shape(vertices)[0]
+    #[old] example['num_vertices'] = tf.shape(vertices)[0]
+    example['num_vertices'] = vertices.shape[0]
 
     # Optionally shuffle vertices and re-order faces to match
     if shuffle_vertices:
-      permutation = tf.random_shuffle(tf.range(example['num_vertices']))
-      vertices = tf.gather(vertices, permutation)
-      face_permutation = tf.concat(
-          [tf.constant([0, 1], dtype=tf.int32), tf.argsort(permutation) + 2],
-          axis=0)
-      example['faces'] = tf.cast(
-          tf.gather(face_permutation, example['faces']), tf.int64)
+      #[old] permutation = tf.random_shuffle(tf.range(example['num_vertices']))
+      #[old] vertices = tf.gather(vertices, permutation)
+      data = torch.arange(example['num_vertices'])
+      indices = torch.randperm(data.shape[0])
+      permutation = data[indices]
+      vertices = vertices.numpy()
+      permutation = permutation.numpy()
+      vertices = torch.from_numpy(vertices[permutation])
+
+      #[old] face_permutation = tf.concat([tf.constant([0, 1], dtype=tf.int32), tf.argsort(permutation) + 2],axis=0)
+      a = torch.tensor([0, 1], dtype=torch.int32)
+      b = torch.argsort(permutation) + 2
+      face_permutation = torch.cat([a, b], dim=0)
+
+      face_permutation = face_permutation.numpy()
+      #[old] temp = tf.gather(face_permutation, example['faces'])
+      i = example['faces'].numpy()
+      temp = torch.from_numpy(face_permutation[i])
+      #[old] example['faces'] = tf.cast(temp, tf.int64)
+      temp = temp.type(torch.LongTensor)
+      example['faces'] = temp
 
     def _dequantize_verts(verts, n_bits):
       min_range = -0.5
       max_range = 0.5
       range_quantize = 2**n_bits - 1
-      verts = tf.cast(verts, tf.float32)
+      #[old] verts = tf.cast(verts, tf.float32)
+      verts = verts.type(torch.FloatTensor)
       verts = verts * (max_range - min_range) / range_quantize + min_range
       return verts
 
     # Vertices are quantized. So convert to floats for input to face model
     example['vertices'] = _dequantize_verts(vertices, quantization_bits)
-    example['vertices_mask'] = tf.ones_like(
-        example['vertices'][..., 0], dtype=tf.float32)
-    example['faces_mask'] = tf.ones_like(example['faces'], dtype=tf.float32)
+    example['vertices_mask'] = torch.ones_like(
+        example['vertices'][..., 0], dtype=torch.float32)
+    example['faces_mask'] = torch.ones_like(example['faces'], dtype=torch.float32)
     return example
   return ds.map(_face_model_map_fn)
 
 
 def read_obj_file(obj_file):
-  """Read vertices and faces from already opened file."""
+  """[Done] Read vertices and faces from already opened file."""
   vertex_list = []
   flat_vertices_list = []
   flat_vertices_indices = {}
@@ -142,14 +163,14 @@ def read_obj_file(obj_file):
 
 
 def read_obj(obj_path):
-  """Open .obj file from the path provided and read vertices and faces."""
+  """[Done] Open .obj file from the path provided and read vertices and faces."""
 
   with open(obj_path) as obj_file:
     return read_obj_file(obj_file)
 
 
 def write_obj(vertices, faces, file_path, transpose=True, scale=1.):
-  """Write vertices and faces to obj."""
+  """[Done] Write vertices and faces to obj."""
   if transpose:
     vertices = vertices[:, [1, 2, 0]]
   vertices *= scale
@@ -170,7 +191,7 @@ def write_obj(vertices, faces, file_path, transpose=True, scale=1.):
 
 
 def quantize_verts(verts, n_bits=8):
-  """Convert vertices in [-1., 1.] to discrete values in [0, n_bits**2 - 1]."""
+  """[Done] Convert vertices in [-1., 1.] to discrete values in [0, n_bits**2 - 1]."""
   min_range = -0.5
   max_range = 0.5
   range_quantize = 2**n_bits - 1
@@ -180,7 +201,7 @@ def quantize_verts(verts, n_bits=8):
 
 
 def dequantize_verts(verts, n_bits=8, add_noise=False):
-  """Convert quantized vertices to floats."""
+  """[Done] Convert quantized vertices to floats."""
   min_range = -0.5
   max_range = 0.5
   range_quantize = 2**n_bits - 1
@@ -192,7 +213,7 @@ def dequantize_verts(verts, n_bits=8, add_noise=False):
 
 
 def face_to_cycles(face):
-  """Find cycles in face."""
+  """[Done] Find cycles in face."""
   g = nx.Graph()
   for v in range(len(face) - 1):
     g.add_edge(face[v], face[v + 1])
@@ -201,7 +222,7 @@ def face_to_cycles(face):
 
 
 def flatten_faces(faces):
-  """Converts from list of faces to flat face array with stopping indices."""
+  """[Done] Converts from list of faces to flat face array with stopping indices."""
   if not faces:
     return np.array([0])
   else:
@@ -211,7 +232,7 @@ def flatten_faces(faces):
 
 
 def unflatten_faces(flat_faces):
-  """Converts from flat face sequence to a list of separate faces."""
+  """[Done] Converts from flat face sequence to a list of separate faces."""
   def group(seq):
     g = []
     for el in seq:
@@ -227,7 +248,7 @@ def unflatten_faces(flat_faces):
 
 
 def center_vertices(vertices):
-  """Translate the vertices so that bounding box is centered at zero."""
+  """[Done] Translate the vertices so that bounding box is centered at zero."""
   vert_min = vertices.min(axis=0)
   vert_max = vertices.max(axis=0)
   vert_center = 0.5 * (vert_min + vert_max)
@@ -235,7 +256,7 @@ def center_vertices(vertices):
 
 
 def normalize_vertices_scale(vertices):
-  """Scale the vertices so that the long diagonal of the bounding box is one."""
+  """[Done] Scale the vertices so that the long diagonal of the bounding box is one."""
   vert_min = vertices.min(axis=0)
   vert_max = vertices.max(axis=0)
   extents = vert_max - vert_min
@@ -244,7 +265,7 @@ def normalize_vertices_scale(vertices):
 
 
 def quantize_process_mesh(vertices, faces, tris=None, quantization_bits=8):
-  """Quantize vertices, remove resulting duplicates and reindex faces."""
+  """[Done] Quantize vertices, remove resulting duplicates and reindex faces."""
   vertices = quantize_verts(vertices, quantization_bits)
   vertices, inv = np.unique(vertices, axis=0, return_inverse=True)
 
@@ -300,7 +321,7 @@ def quantize_process_mesh(vertices, faces, tris=None, quantization_bits=8):
 
 
 def process_mesh(vertices, faces, quantization_bits=8):
-  """Process mesh vertices and faces."""
+  """[Done] Process mesh vertices and faces."""
 
   # Transpose so that z-axis is vertical.
   vertices = vertices[:, [2, 0, 1]]
@@ -328,7 +349,7 @@ def process_mesh(vertices, faces, quantization_bits=8):
 
 
 def load_process_mesh(mesh_obj_path, quantization_bits=8):
-  """Load obj file and process."""
+  """[Done] Load obj file and process."""
   # Load mesh
   vertices, faces = read_obj(mesh_obj_path)
   return process_mesh(vertices, faces, quantization_bits)
@@ -342,7 +363,7 @@ def plot_meshes(mesh_list,
                 vert_size=10,
                 vert_alpha=0.75,
                 n_cols=4):
-  """Plots mesh data using matplotlib."""
+  """[Done] Plots mesh data using matplotlib."""
 
   n_plot = len(mesh_list)
   n_cols = np.minimum(n_plot, n_cols)
