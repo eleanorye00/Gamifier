@@ -1,141 +1,146 @@
 import tensorflow as tf
-from random import *
+import numpy as np
+tf.keras.backend.set_floatx('float64')
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from paletteGAN_data_loader import *
 from paletteGAN_utils import *
 
-class CA_NET(nn.Module):
 
-    def __init__(self):
-        super(CA_NET, self).__init__()
-        self.t_dim = 150
-        self.c_dim = 150
-        self.fc = nn.Linear(self.t_dim, self.c_dim * 2, bias=True)
-        self.relu = nn.ReLU()
+class Generator(tf.keras.Model):
+    def __init__(self, c_dim):
+        super(Generator, self).__init__()
+        #self.leaky_relu = tf.keras.layers.LeakyReLU(0.01)
+        self.model = tf.keras.Sequential()
+        self.model.add(tf.keras.layers.Dense(300, input_shape=(c_dim,), activation="relu"))
+        self.model.add(tf.keras.layers.Dense(300, activation="relu"))
+        self.model.add(tf.keras.layers.Dense(75, activation="relu"))
+        self.model.add = tf.keras.layers.Dense(15) # , activation='tanh')
 
-    def encode(self, text_embedding):
-        x = self.relu(self.fc(text_embedding))
-        mu = x[:, :, :self.c_dim]
-        logvar = x[:, :, self.c_dim:]
-        return mu, logvar
-
-    def reparametrize(self, mu, logvar):
-        std = logvar.mul(0.5).exp_()
-        eps = torch.cuda.FloatTensor(std.size()).normal_(0.0, 1)
-        return eps * std + mu
-
-    def forward(self, text_embedding):
-        mu, logvar = self.encode(text_embedding)
-        c_code = self.reparametrize(mu, logvar)
-        return c_code, mu, logvar
+    @tf.function
+    def call(self, c: tf.Tensor) -> tf.Tensor:
+        """Generates a batch of palettes given a tensor of class conditioning vectors.
+        Inputs:
+        - x: A [batch_size, input_sz] tensor of noise vectors
+        Returns:
+        TensorFlow Tensor with shape [batch_size, 15], containing the generated colors.
+        """
+        return self.model(c)
 
 
-class EncoderRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, n_layers, dropout_p, W_emb=None):
-        super(EncoderRNN, self).__init__()
+class Discriminator(tf.keras.Model):
 
-        self.hidden_size = hidden_size
-        self.n_layers = n_layers
-
-        self.embed = Embed(input_size, 300, W_emb, True)
-        self.gru = nn.GRU(300, hidden_size, n_layers, dropout=dropout_p)
-        self.ca_net = CA_NET()
-
-    def forward(self, word_inputs, hidden):
-        embedded = self.embed(word_inputs).transpose(0,1)
-        output, hidden = self.gru(embedded, hidden)
-        c_code, mu, logvar = self.ca_net(output)
-
-        return c_code, hidden, mu, logvar
-
-    def init_hidden(self,batch_size):
-        hidden = torch.zeros(self.n_layers, batch_size, self.hidden_size)
-
-        return hidden
-
-
-class AttnDecoderRNN(nn.Module):
-    def __init__(self, input_dict, hidden_size, n_layers=1, dropout_p=0.1):
-        super(AttnDecoderRNN, self).__init__()
-        self.input_dict = input_dict
-        self.attn = Attn(hidden_size, input_dict.max_len)
-        self.hidden_size = hidden_size
-        self.n_layers = n_layers
-        self.dropout_p = dropout_p
-        self.palette_dim = 3
-
-        self.gru = nn.GRUCell(self.hidden_size + self.palette_dim, hidden_size)
-
-        self.out = nn.Sequential(
-                        nn.Linear(hidden_size, hidden_size),
-                        nn.ReLU(inplace=True),
-                        nn.BatchNorm1d(hidden_size),
-                        nn.Linear(hidden_size,self.palette_dim)
-                   )
-
-    def forward(self, last_palette, last_decoder_hidden, encoder_outputs, each_input_size, i):
-
-        # Compute context vector.
-        if i == 0:
-            context = torch.mean(encoder_outputs, dim=1, keepdim=True)
-        else:
-            attn_weights = self.attn(last_decoder_hidden.squeeze(0), encoder_outputs, each_input_size)
-            context = torch.bmm(attn_weights, encoder_outputs.transpose(0,1))
-
-        # Compute gru output.
-        gru_input = torch.cat((last_palette, context.squeeze(1)), 1)
-        gru_hidden = self.gru(gru_input, last_decoder_hidden)
-
-        # Generate palette color.
-        palette = self.out(gru_hidden.squeeze(0))
-        return palette, context.unsqueeze(0), gru_hidden, attn_weights
-
-
-class Attn(nn.Module):
-    def __init__(self, hidden_size, max_length):
-        super(Attn, self).__init__()
-        self.hidden_size = hidden_size
-        self.softmax = nn.Softmax(dim=0)
-        self.attn_e = nn.Linear(self.hidden_size, self.hidden_size)
-        self.attn_h = nn.Linear(self.hidden_size, self.hidden_size)
-        self.attn_energy = nn.Linear(self.hidden_size, 1)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, hidden, encoder_outputs, each_size):
-        seq_len = encoder_outputs.size(0)
-        batch_size = encoder_outputs.size(1)
-        attn_energies = torch.zeros(seq_len,batch_size,1).cuda()
-
-        for i in range(seq_len):
-            attn_energies[i] = self.score(hidden, encoder_outputs[i])
-
-        attn_energies = self.softmax(attn_energies) # (seq_len, batch_size, 1)
-        return attn_energies.permute(1,2,0)         # (batch_size, 1, seq_len)
-
-    def score(self, hidden, encoder_output):
-        encoder_ = self.attn_e(encoder_output)  # encoder output (batch_size, hidden_size)
-        hidden_ = self.attn_h(hidden)           # hidden (batch_size, hidden_size)
-        energy = self.attn_energy(self.sigmoid(encoder_ + hidden_))
-
-        return energy
-
-
-class Discriminator(nn.Module):
-    def __init__(self, color_size=15, hidden_dim=150):
+    def __init__(self, palette_dim, c_dim):
         super(Discriminator, self).__init__()
-        curr_dim = color_size+hidden_dim
+        self.leaky_relu = tf.keras.layers.LeakyReLU(0.01)
+        self.model = tf.keras.Sequential()
+        self.model.add(tf.keras.layers.Dense(256, input_shape=(palette_dim + c_dim,), activation=self.leaky_relu))
+        self.model.add(tf.keras.layers.Dense(256, activation=self.leaky_relu))
+        self.model.add(tf.keras.layers.Dense(64, activation=self.leaky_relu))
+        self.model.add(tf.keras.layers.Dense(1))
 
-        layers = []
-        layers.append(nn.Linear(curr_dim, int(curr_dim/2)))
-        layers.append(nn.ReLU(inplace=True))
-        layers.append(nn.Linear(int(curr_dim/2), int(curr_dim/4)))
-        layers.append(nn.ReLU(inplace=True))
-        layers.append(nn.Linear(int(curr_dim/4), int(curr_dim/8)))
-        layers.append(nn.ReLU(inplace=True))
-        layers.append(nn.Linear(int(curr_dim/8), 1)) # 9 -> 1
-        layers.append(nn.Sigmoid())
+    @tf.function
+    def call(self, palette: tf.Tensor, c: tf.Tensor) -> tf.Tensor:
+        """Compute discriminator score for a batch of input palette and class condition.
+        Inputs:
+        - palette: TensorFlow Tensor of shape [batch_size, palette_dim], where palette_dim defaults to 15
+        - c: TensorFlow Tensor of class condition of shape [batch_size, c_dim], where c_dim defaults to 300
+        Returns:
+        TensorFlow Tensor with shape [batch_size, 1], containing the score for a palette being real for
+        each input (palette + class condition)."""
+        assert palette.shape[0] == c.shape[0], "Palette and class condition must be of the same batch size."
+        x = tf.concat([palette, c], axis=1)
+        return self.model(x)
 
-        self.main = nn.Sequential(*layers)
 
-    def forward(self, color, text):
-        out = torch.cat([color, text], dim=1) # color: batch x 15, text: batch x 150
-        out2 = self.main(out)
-        return out2.squeeze(1)
+class PaletteGAN():
+    def __init__(self, args):
+        self.args = args
+        self.generator = Generator(args["c_dim"])
+        self.discriminator = Discriminator(args["palette_dim"], args["c_dim"])
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=args["lr"], beta_1=args["beta_1"])
+
+    def generator_loss(self, logits_fake: tf.Tensor, logits_real: tf.Tensor) -> tf.Tensor:
+        """Compute the discriminator loss.
+        Inputs:
+        - logits_real: Tensor, shape [batch_size, 1], output of discriminator for each real image.
+        - logits_fake: Tensor, shape[batch_size, 1], output of discriminator for each fake image."""
+        G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_fake),
+                                                                        logits=logits_fake))
+        return G_loss
+
+    def discriminator_loss(self, logits_fake: tf.Tensor, logits_real: tf.Tensor) -> tf.Tensor:
+        """Compute the discriminator loss."""
+        D_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+                                                    labels=tf.zeros_like(logits_fake),
+                                                    logits=logits_fake))
+        D_loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+                                                    labels=tf.ones_like(logits_real),
+                                                    logits=logits_real))
+        return D_loss
+
+    def optimize(self, tape: tf.GradientTape, component: tf.keras.Model, loss: tf.Tensor):
+        """ This optimizes a component (generator or discriminator) with respect to its loss.
+        Inputs:
+        - tape: the Gradient Tape
+        - model: the model to be trained
+        - loss: the model's loss."""
+        with tape as tape:
+            gradients = tape.gradient(loss, component.trainable_variables)
+            self.optimizer.apply_gradients(zip(gradients, component.trainable_variables))
+
+
+
+
+def train(model, train_loader, num_epochs=1000):
+
+    print('Start training...')
+    g_loss_history = np.zeros(num_epochs)
+    d_loss_history = np.zeros(num_epochs)
+    for epoch in range(num_epochs):
+
+        # Keep track of per palette (i.e. example) loss
+        epoch_g_loss = []
+        epoch_d_loss = []
+        for batch_idx, (txt_embeddings, real_palettes) in enumerate(train_loader):
+            batch_size = txt_embeddings.size(0)
+
+            with tf.GradientTape(persistent=True) as tape:
+                # call, get outputs
+                fake_palettes = model.generator(txt_embeddings)
+                logits_real = model.discriminator(real_palettes, txt_embeddings)
+                logits_fake = model.discriminator(fake_palettes, txt_embeddings)
+
+                g_loss = model.generator_loss(logits_fake, logits_real)
+                d_loss = model.discriminator_loss(logits_fake, logits_real)
+
+            model.optimize(tape, model.generator, g_loss)
+            model.optimize(tape, model.discriminator, d_loss)
+
+            epoch_g_loss.append(g_loss/batch_size)
+            epoch_d_loss.append(d_loss/batch_size)
+
+        avg_g_loss = tf.reduce_mean(epoch_g_loss)
+        avg_d_loss = tf.reduce_mean(epoch_d_loss)
+        g_loss_history[epoch] = avg_g_loss
+        d_loss_history[epoch] = avg_d_loss
+
+        if epoch % 10 == 0 or epoch == num_epochs-1:
+            print("Epoch", epoch,
+                  "generator loss:", avg_g_loss, ", discriminator loss:", avg_d_loss)
+
+    return model, g_loss_history, d_loss_history
+
+
+if __name__ == "main":
+    args = {
+        "palette_dim": 15,
+        "c_dim": 300,
+        "lr": 1e-4,
+        "beta_1": 0.5
+        "batch_size": 32,
+
+    }
+    model = PaletteGAN(args=args)
+    train_loader =
+

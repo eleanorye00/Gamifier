@@ -1,13 +1,13 @@
 import numpy as np
-import torch
-import torch.nn as nn
 import warnings
 from skimage.color import lab2rgb, rgb2lab
+import os
+import pickle
+
 
 # ======================== For text embeddings ======================== #
 SOS_token = 0
 EOS_token = 1
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class Dictionary:
     def __init__(self):
@@ -76,22 +76,6 @@ class Embed(nn.Module):
 
 
 # ======================== For processing data ======================== #
-def process_image(image_data, batch_size, imsize):
-    input = torch.zeros(batch_size, 1, imsize, imsize)
-    labels = torch.zeros(batch_size, 2, imsize, imsize)
-    images_np = image_data.numpy().transpose((0, 2, 3, 1))
-
-    for k in range(batch_size):
-        img_lab = rgb2lab(images_np[k], illuminant='D50')
-        img_l = img_lab[:, :, 0] / 100
-        input[k] = torch.from_numpy(np.expand_dims(img_l, 0))
-
-        img_a_scale = (img_lab[:, :, 1:2] + 88) / 185
-        img_b_scale = (img_lab[:, :, 2:3] + 127) / 212
-
-        img_ab_scale = np.concatenate((img_a_scale, img_b_scale), axis=2)
-        labels[k] = torch.from_numpy(img_ab_scale.transpose((2, 0, 1)))
-    return input, labels
 
 def process_palette_ab(pal_data, batch_size):
     img_a_scale = (pal_data[:, :, 1:2] + 88) / 185
@@ -134,20 +118,6 @@ def process_global_lab(input_lab, batch_size, always_give_global_hint):
         for l in range(batch_size):
             if B_hist[l].numpy() == 0:
                 X_hist[l] = torch.rand(15)
-
-    global_input = torch.cat([X_hist, B_hist], 1)
-    return global_input
-
-def process_global_sampling_ab(palette, batch_size, imsize, hist_mean, hist_std):
-    X_hist = palette.to(device)
-    B_hist = torch.ones(batch_size, 1, 1, 1).to(device)
-
-    global_input = torch.cat([X_hist, B_hist], 1)
-    return global_input
-
-def process_global_sampling_lab(palette, batch_size, imsize, hist_mean, hist_std):
-    X_hist = palette.to(device)
-    B_hist = torch.ones(batch_size, 1, 1, 1).to(device)
 
     global_input = torch.cat([X_hist, B_hist], 1)
     return global_input
