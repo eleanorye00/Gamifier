@@ -137,7 +137,7 @@ if __name__ == "main":
         "palette_dim": 15,
         "c_dim": 300,
         "lr": 1e-4,
-        "beta_1": 0.5
+        "beta_1": 0.5,
         "batch_size": 32,
 
     }
