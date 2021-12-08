@@ -1,10 +1,12 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 from tensorflow.keras import Model
-from preprocess import get_data
-from preprocess import batch_getter
-from preprocess import rnn_vectorize_inputs
-from preprocess import rnn_vectorize_labels
+
+from thinker_preprocess import batch_getter
+from thinker_preprocess import get_data
+from thinker_preprocess import get_object_data
+from thinker_preprocess import rnn_vectorize_inputs
+from thinker_preprocess import rnn_vectorize_labels
 
 
 class Model(tf.keras.Model):
@@ -54,12 +56,9 @@ def train(model, train_inputs):
     step = 0
     for i in range(model.batch_size, len(labels_training) + model.batch_size, model.batch_size):
 
-        # Get the batch for the inputs
         tr_inputs = batch_getter(inputs_training, model.batch_size, i)
-        # Get the batch for the labels
         tr_labels = batch_getter(labels_training, model.batch_size, i)
 
-        # Use back propagation to calculate the gradients for the weights and biases (perform gradient descent)
         with tf.GradientTape() as tape:
             probabilities, _ = model.call(tr_inputs, initial_state)
             loss = model.loss(probabilities, tr_labels)
@@ -103,91 +102,83 @@ def euclidean_distance(vec1, vec2):
 
 
 def find_closest(word, vocab, model):
-    # vocab = 54 words
-    # model already has trained weights
-    reverse_vocab = {idx: word for word, idx in vocab.items()}
+    if word not in vocab:
+        print('Sorry! I can create 54 3-D objects, but this is not one of them yet! Please select your object from '
+              'the list of available 3D models')
+    word_to_id = {w: i for i, w in enumerate(list(vocab))}
+    id_to_word = {i: w for w, i in vocab.items()}
 
-    first_string = word
-    word_index = vocab[word]
-    next_input = [[word_index]]
-    word_list = [first_string]
+    vectors = model.E.read_value()
+    word_index = word_to_id[word]
 
-    # logits, previous_state = model.call(next_input, None)
-
-    min_dist = 10000  # to act like positive infinity
-    min_index = -1
-    # for index, vector in enumerate(logits):
-
-    for i in range(10):
-        logits, previous_state = model.call(next_input, None)
-        query_vector = logits[word_index]
-
-        if euclidean_distance(logits[i], query_vector) < min_dist and not np.array_equal(logits[i], query_vector):
-            min_dist = euclidean_distance(logits, query_vector)
-            min_index = query_vector
-            closest_word = reverse_vocab[min_index]
-            word_list.append(closest_word)
-
-            # top = np.argsort(logits)[-i:]
-            top_10 = np.argsort(logits)[-10:]
-            n_logits = np.exp(logits[top_10]) / np.exp(logits[top_10]).sum()
-            out_index = np.random.choice(top_10, p=n_logits)
-            next_input = [[out_index]]
-
-    return closest_word
+    min_dist = 1000
+    query_vector = vectors[word_index]
+    word_list = []
+    for index, vector in enumerate(vectors):
+        if euclidean_distance(vector, query_vector) < min_dist and vector is not query_vector:
+            min_dist = euclidean_distance(vector, query_vector)
+            # print(id_to_word[index], min_dist)
+            word_list.append((id_to_word[index], min_dist))
+    word_list.sort(key=lambda x: x[-1])
+    # final_word_list = word_list[0]
+    # print(word_list)
+    return word_list
 
 
-def order_polygen(word, vocab, model):
-
-
-def generate_sentence(word1, length, vocab, model, sample_n=10):
-    """
-    Takes a model, vocab, selects from the most likely next word from the model's distribution
-
-    :param model: trained RNN model
-    :param vocab: dictionary, word to id mapping
-    :return: None
-    """
-
-    # NOTE: Feel free to play around with different sample_n values
-
+def find_closest_two(word, vocab, model):
     reverse_vocab = {idx: word for word, idx in vocab.items()}
     previous_state = None
 
-    first_string = word1
-    first_word_index = vocab[word1]
+    first_string = word
+    first_word_index = vocab[word]
     next_input = [[first_word_index]]
     text = [first_string]
 
-    for i in range(length):
+    for i in range(5):
         logits, previous_state = model.call(next_input, previous_state)
         logits = np.array(logits[0, 0, :])
-        top_n = np.argsort(logits)[-sample_n:]
+        top_n = np.argsort(logits)[-4:]
         n_logits = np.exp(logits[top_n]) / np.exp(logits[top_n]).sum()
         out_index = np.random.choice(top_n, p=n_logits)
 
         text.append(reverse_vocab[out_index])
         next_input = [[out_index]]
-
-    print(" ".join(text))
+    return text
 
 
 def main():
     train_data, test_data, dictionary = get_data(
-        'data/train.txt',
-        'data/test.txt')
+        '/Users/matthewstephens/PycharmProjects/RNN-Gamifier/data/train.txt',
+        '/Users/matthewstephens/PycharmProjects/RNN-Gamifier/data/test.txt')
+
+    object_dictionary = get_object_data('/Users/matthewstephens/PycharmProjects/RNN-Gamifier/hw3/Data/objects.txt')
 
     # TODO: initialize model
     vocab_size = len(dictionary)
     model = Model(vocab_size)
 
     # TODO: Set-up the training step
-    train(model, train_data, train_data)
+    train(model, train_data)
 
     # TODO: Set up the testing steps
-    perplexity = test(model, test_data, test_data)
-    print("Perplexity score = ", perplexity)
+    # perplexity = test(model, test_data)
+    # print("Perplexity score = ", perplexity)
+    return model
 
 
-if __name__ == '__main__':
-    main()
+def check(model):
+    object_dictionary = get_object_data('/Users/matthewstephens/PycharmProjects/RNN-Gamifier/hw3/Data/objects.txt')
+    print("train:", find_closest('train', object_dictionary, model))
+    print("plane:", find_closest('plane', object_dictionary, model))
+    print("cap:", find_closest('cap', object_dictionary, model))
+    print("car:", find_closest('car', object_dictionary, model))
+    print("auto:", find_closest('auto', object_dictionary, model))
+    print("chair:", find_closest('chair', object_dictionary, model))
+    print("keypad:", find_closest('keypad', object_dictionary, model))
+    print("table:", find_closest('table', object_dictionary, model))
+
+
+
+
+"""if __name__ == '__main__':
+    main()"""
