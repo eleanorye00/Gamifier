@@ -144,13 +144,29 @@ def train(model, train_loader, num_epochs=1000):
     return model, g_loss_history, d_loss_history
 
 
-def test(model, input_word):
+def test(model, inputs):
     """
-    Generate palettes from the user-input word.
-    :param model: Trained PaletteGAN model
-    :return: None
-    """
-    pass
+        Generate palettes from the user-input word.
+        :param model: Trained PaletteGAN model
+        :param inputs: list of words
+        :return: None
+        """
+    print('Fetching your colour recommendation...')
+    train_dataset, input_dict = t2p_loader(batch_size=100)
+    recommendations = []
+    for word in inputs:
+        # dictionary = dict.fromkeys(inputs, word)
+        word_id = input_dict.word2index[word]
+        txt_embeddings = tf.nn.embedding_lookup(model.embeddings, [word_id])
+        colour_recommendation = model.generator(txt_embeddings)
+        print(colour_recommendation)
+        # tensor = tf.constant(colour_recommendation)
+        # tensor = tf.squeeze(tensor)
+        # colour_recommendation = tensor.numpy()
+        # display_palette(colour_recommendation, word, set_title=True)
+        recommendations.append((word, colour_recommendation))
+    # print(recommendations.shape)
+    return recommendations
 
 
 def main():
@@ -159,12 +175,12 @@ def main():
         "c_dim": 100,
         "g_hidden_dim": 256,
         "d_hidden_dim": 256,
-        "lr": 1e-4,
+        "lr": 5e-4,
         "lambda_GAN": 0.1,
         "lambda_sL1": 100,
         "beta_1": 0.5,
         "batch_size": 32,
-        "num_epochs": 200
+        "num_epochs": 500
     }
     embed_file_path = os.path.join('./data', 'glove.6B.100d.txt')
     train_dataset, input_dict = t2p_loader(batch_size=args["batch_size"])
