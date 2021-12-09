@@ -58,8 +58,6 @@ class PaletteGAN():
     def __init__(self, args):
         self.args = args
         self.encoder = tf.keras.layers.Embedding(1, args["c_dim"],
-                                                 vocab_size=args["n_words"],
-                                                 embedding_dim=args["c_dim"],
                                                  embeddings_initializer=tf.keras.initializers.Constant(args["W_emb"]),
                                                  trainable=False)
         self.generator = Generator(args["c_dim"]) # generator takes in "c" which is 1x300
@@ -157,15 +155,15 @@ def main():
         "lr": 1e-4,
         "beta_1": 0.5,
         "batch_size": 32,
-        "num_epochs": 100
+        "num_epochs": 200
     }
-    embed_file_path = os.path.join('./data', 'Color-Hex-vf.pth')
+    embed_file_path = os.path.join('./data', 'glove.6B.100d.txt')
     train_dataset, input_dict = t2p_loader(batch_size=args["batch_size"])
     args["W_emb"] = load_pretrained_embedding(dictionary=input_dict.word2index,
                                               embed_file=embed_file_path,
-                                              embed_dim=300)
-    args["n_words"] = len(input_dict)
-    print("n_words:", len(input_dict))
+                                              embed_dim=args["c_dim"])
+    args["n_words"] = len(input_dict.word2index)
+    print("n_words:", len(input_dict.word2index))
 
     model = PaletteGAN(args=args)
     train(model=model, train_loader=train_dataset, num_epochs=args["num_epochs"])
