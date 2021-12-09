@@ -42,7 +42,7 @@ def t2p_loader(batch_size):
             if word_id not in word_id_to_palette_id.keys():
                 word_id_to_palette_id[word_id] = index
                 words_index.append(word_id)
-    src_seqs = tf.convert_to_tensor(words_index, dtype=tf.float32)
+    src_seqs = tf.convert_to_tensor(words_index, dtype=tf.int64)
 
     palette_list = []
     for i in words_index:
