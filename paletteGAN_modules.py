@@ -111,7 +111,7 @@ def train(model, train_loader, num_epochs=1000):
         epoch_g_loss = []
         epoch_d_loss = []
         for batch_idx, (word_ids, real_palettes) in enumerate(train_loader):
-            batch_size = word_ids.size(0)
+            batch_size = word_ids.shape[0]
 
             with tf.GradientTape(persistent=True) as tape:
                 # call, get outputs
