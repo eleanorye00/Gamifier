@@ -37,7 +37,7 @@ class Discriminator(tf.keras.Model):
         self.model.add(tf.keras.layers.Dense(hidden_dim, input_shape=(palette_dim + c_dim,), activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(hidden_dim, activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(hidden_dim, activation=self.leaky_relu))
-        self.model.add(tf.keras.layers.Dense(1)
+        self.model.add(tf.keras.layers.Dense(1))
 
     @tf.function
     def call(self, palette: tf.Tensor, c: tf.Tensor) -> tf.Tensor:
