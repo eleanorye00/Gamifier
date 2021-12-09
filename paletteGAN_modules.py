@@ -15,7 +15,7 @@ class Generator(tf.keras.Model):
         self.model.add(tf.keras.layers.Dense(100, input_shape=(c_dim,), activation="relu"))
         self.model.add(tf.keras.layers.Dense(100, activation="relu"))
         self.model.add(tf.keras.layers.Dense(100, activation="relu"))
-        self.model.add(tf.keras.layers.Dense(15))  # , activation='tanh')
+        self.model.add(tf.keras.layers.Dense(15, activation="sigmoid"))
 
     @tf.function
     def call(self, c: tf.Tensor) -> tf.Tensor:
@@ -37,7 +37,7 @@ class Discriminator(tf.keras.Model):
         self.model.add(tf.keras.layers.Dense(115, input_shape=(palette_dim + c_dim,), activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(115, activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(64, activation=self.leaky_relu))
-        self.model.add(tf.keras.layers.Dense(1))
+        self.model.add(tf.keras.layers.Dense(1, activation="sigmoid"))
 
     @tf.function
     def call(self, palette: tf.Tensor, c: tf.Tensor) -> tf.Tensor:
@@ -150,6 +150,7 @@ def test(model, input_word):
     :param model: Trained PaletteGAN model
     :return: None
     """
+    pass
 
 
 def main():
@@ -174,5 +175,4 @@ def main():
     train(model=model, train_loader=train_dataset, num_epochs=args["num_epochs"])
     print("Training done!")
 
-    test(model)
     return model
