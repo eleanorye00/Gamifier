@@ -8,13 +8,12 @@ from paletteGAN_utils import *
 
 
 class Generator(tf.keras.Model):
-    def __init__(self, c_dim):
+    def __init__(self, c_dim, hidden_dim):
         super(Generator, self).__init__()
-        # self.leaky_relu = tf.keras.layers.LeakyReLU(0.01)
+        self.leaky_relu = tf.keras.layers.LeakyReLU(0.01)
         self.model = tf.keras.Sequential()
-        self.model.add(tf.keras.layers.Dense(100, input_shape=(c_dim,), activation="relu"))
-        self.model.add(tf.keras.layers.Dense(100, activation="relu"))
-        self.model.add(tf.keras.layers.Dense(100, activation="relu"))
+        self.model.add(tf.keras.layers.Dense(hidden_dim, input_shape=(c_dim,), activation=self.leaky_relu))
+        self.model.add(tf.keras.layers.Dense(int(hidden_dim/2), activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(15, activation="sigmoid"))
 
     @tf.function
@@ -30,13 +29,12 @@ class Generator(tf.keras.Model):
 
 class Discriminator(tf.keras.Model):
 
-    def __init__(self, palette_dim, c_dim):
+    def __init__(self, palette_dim, c_dim, hidden_dim):
         super(Discriminator, self).__init__()
         self.leaky_relu = tf.keras.layers.LeakyReLU(0.01)
         self.model = tf.keras.Sequential()
-        self.model.add(tf.keras.layers.Dense(115, input_shape=(palette_dim + c_dim,), activation=self.leaky_relu))
-        self.model.add(tf.keras.layers.Dense(115, activation=self.leaky_relu))
-        self.model.add(tf.keras.layers.Dense(64, activation=self.leaky_relu))
+        self.model.add(tf.keras.layers.Dense(hidden_dim, input_shape=(palette_dim + c_dim,), activation=self.leaky_relu))
+        self.model.add(tf.keras.layers.Dense(int(hidden_dim/4), activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(1, activation="sigmoid"))
 
     @tf.function
@@ -59,8 +57,8 @@ class PaletteGAN():
                                                      embeddings_initializer=tf.keras.initializers.Constant(args["W_emb"]),
                                                      trainable=False)"""
         self.embeddings = args["W_emb"]
-        self.generator = Generator(args["c_dim"])  # generator takes in "c" which is 1x300
-        self.discriminator = Discriminator(args["palette_dim"], args["c_dim"])
+        self.generator = Generator(args["c_dim"], args["g_hidden_dim"])  # generator takes in "c" which is 1x300
+        self.discriminator = Discriminator(args["palette_dim"], args["c_dim"], args["d_hidden_dim"])
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=args["lr"], beta_1=args["beta_1"])
 
     def generator_loss(self, logits_fake, fake_palettes, real_palettes) -> tf.Tensor:
@@ -157,6 +155,8 @@ def main():
     args = {
         "palette_dim": 15,
         "c_dim": 100,
+        "g_hidden_dim": 256,
+        "d_hidden_dim": 256,
         "lr": 1e-4,
         "lambda_sL1": 100,
         "beta_1": 0.5,
