@@ -57,7 +57,8 @@ class Discriminator(tf.keras.Model):
 class PaletteGAN():
     def __init__(self, args):
         self.args = args
-        self.encoder = tf.keras.layers.Embedding(vocab_size=args["n_words"],
+        self.encoder = tf.keras.layers.Embedding(input_dim=1, output_dim=args["c_dim"],
+                                                 vocab_size=args["n_words"],
                                                  embedding_dim=args["c_dim"],
                                                  embeddings_initializer=tf.keras.initializers.Constant(args["W_emb"]),
                                                  trainable=False)
