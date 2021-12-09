@@ -13,9 +13,9 @@ class Generator(tf.keras.Model):
         super(Generator, self).__init__()
         # self.leaky_relu = tf.keras.layers.LeakyReLU(0.01)
         self.model = tf.keras.Sequential()
-        self.model.add(tf.keras.layers.Dense(300, input_shape=(c_dim,), activation="relu"))
-        self.model.add(tf.keras.layers.Dense(300, activation="relu"))
-        self.model.add(tf.keras.layers.Dense(75, activation="relu"))
+        self.model.add(tf.keras.layers.Dense(100, input_shape=(c_dim,), activation="relu"))
+        self.model.add(tf.keras.layers.Dense(100, activation="relu"))
+        self.model.add(tf.keras.layers.Dense(100, activation="relu"))
         self.model.add = tf.keras.layers.Dense(15) # , activation='tanh')
 
     @tf.function
@@ -35,8 +35,8 @@ class Discriminator(tf.keras.Model):
         super(Discriminator, self).__init__()
         self.leaky_relu = tf.keras.layers.LeakyReLU(0.01)
         self.model = tf.keras.Sequential()
-        self.model.add(tf.keras.layers.Dense(256, input_shape=(palette_dim + c_dim,), activation=self.leaky_relu))
-        self.model.add(tf.keras.layers.Dense(256, activation=self.leaky_relu))
+        self.model.add(tf.keras.layers.Dense(115, input_shape=(palette_dim + c_dim,), activation=self.leaky_relu))
+        self.model.add(tf.keras.layers.Dense(115, activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(64, activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(1))
 
@@ -58,7 +58,7 @@ class PaletteGAN():
     def __init__(self, args):
         self.args = args
         self.encoder = tf.keras.layers.Embedding(vocab_size=args["n_words"],
-                                                 embedding_dim=300,
+                                                 embedding_dim=args["c_dim"],
                                                  embeddings_initializer=tf.keras.initializers.Constant(args["W_emb"]),
                                                  trainable=False)
         self.generator = Generator(args["c_dim"]) # generator takes in "c" which is 1x300
@@ -152,11 +152,11 @@ def test(model, input_word):
 def main():
     args = {
         "palette_dim": 15,
-        "c_dim": 300,
+        "c_dim": 100,
         "lr": 1e-4,
         "beta_1": 0.5,
         "batch_size": 32,
-        "num_epochs": 1000
+        "num_epochs": 100
     }
     embed_file_path = os.path.join('./data', 'Color-Hex-vf.pth')
     train_dataset, input_dict = t2p_loader(batch_size=args["batch_size"])
