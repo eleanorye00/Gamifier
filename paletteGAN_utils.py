@@ -79,5 +79,5 @@ def display_palette(GAN_output, word: str, set_title=True):
     RGB = GAN_output[I]
     plt.imshow(RGB)
     if set_title:
-        plt.title('word')
-    plt.savefig(os.path.join('./paletteGAN_outputs', 'word.png'))
+        plt.title(word)
+    plt.savefig(os.path.join('./paletteGAN_outputs', word+'.png'))
