@@ -1,11 +1,10 @@
-import tensorflow as tf
-import numpy as np
 # tf.keras.backend.set_floatx('float64')
-#import matplotlib.pyplot as plt
-#import matplotlib.gridspec as gridspec
+# import matplotlib.pyplot as plt
+# import matplotlib.gridspec as gridspec
+import os
+
 from paletteGAN_data_loader import *
 from paletteGAN_utils import *
-import os
 
 
 class Generator(tf.keras.Model):
@@ -16,7 +15,7 @@ class Generator(tf.keras.Model):
         self.model.add(tf.keras.layers.Dense(100, input_shape=(c_dim,), activation="relu"))
         self.model.add(tf.keras.layers.Dense(100, activation="relu"))
         self.model.add(tf.keras.layers.Dense(100, activation="relu"))
-        self.model.add = tf.keras.layers.Dense(15) # , activation='tanh')
+        self.model.add(tf.keras.layers.Dense(15))  # , activation='tanh')
 
     @tf.function
     def call(self, c: tf.Tensor) -> tf.Tensor:
@@ -53,18 +52,16 @@ class Discriminator(tf.keras.Model):
         x = tf.concat([palette, c], axis=1)
         return self.model(x)
 
-
 class PaletteGAN():
     def __init__(self, args):
         self.args = args
         """self.encoder = tf.keras.layers.Embedding(1, args["c_dim"],
-                                                 embeddings_initializer=tf.keras.initializers.Constant(args["W_emb"]),
-                                                 trainable=False)"""
+                                                     embeddings_initializer=tf.keras.initializers.Constant(args["W_emb"]),
+                                                     trainable=False)"""
         self.embeddings = args["W_emb"]
-        self.generator = Generator(args["c_dim"]) # generator takes in "c" which is 1x300
+        self.generator = Generator(args["c_dim"])  # generator takes in "c" which is 1x300
         self.discriminator = Discriminator(args["palette_dim"], args["c_dim"])
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=args["lr"], beta_1=args["beta_1"])
-
 
     def generator_loss(self, logits_fake, fake_palettes, real_palettes) -> tf.Tensor:
         """Compute the discriminator loss.
@@ -83,11 +80,11 @@ class PaletteGAN():
     def discriminator_loss(self, logits_fake, logits_real) -> tf.Tensor:
         """Compute the discriminator loss."""
         D_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-                                                    labels=tf.zeros_like(logits_fake),
-                                                    logits=logits_fake))
+            labels=tf.zeros_like(logits_fake),
+            logits=logits_fake))
         D_loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-                                                    labels=tf.ones_like(logits_real),
-                                                    logits=logits_real))
+            labels=tf.ones_like(logits_real),
+            logits=logits_real))
         return D_loss
 
     def optimize(self, tape: tf.GradientTape, component: tf.keras.Model, loss: tf.Tensor):
@@ -116,10 +113,13 @@ def train(model, train_loader, num_epochs=1000):
 
             with tf.GradientTape(persistent=True) as tape:
                 # call, get outputs
-                print("word_ids shape:", word_ids.shape)
+                # print("word_ids shape:", word_ids.shape)
+                # txt_embeddings = model.encoder(word_ids)
                 # txt_embeddings = model.encoder(word_ids)
                 txt_embeddings = tf.nn.embedding_lookup(model.embeddings, word_ids)
                 fake_palettes = model.generator(txt_embeddings)
+                # print("fake:", fake_palettes.shape)
+                # print("txt", txt_embeddings)
                 logits_real = model.discriminator(real_palettes, txt_embeddings)
                 logits_fake = model.discriminator(fake_palettes, txt_embeddings)
 
@@ -137,7 +137,7 @@ def train(model, train_loader, num_epochs=1000):
         g_loss_history[epoch] = avg_g_loss
         d_loss_history[epoch] = avg_d_loss
 
-        if epoch % 10 == 0 or epoch == num_epochs-1:
+        if epoch % 10 == 0 or epoch == num_epochs - 1:
             print("Epoch", epoch,
                   "generator loss:", avg_g_loss.numpy(), ", discriminator loss:", avg_d_loss.numpy())
 
@@ -151,11 +151,13 @@ def test(model, input_word):
     :return: None
     """
 
+
 def main():
     args = {
         "palette_dim": 15,
         "c_dim": 100,
         "lr": 1e-4,
+        "lambda_sL1": 100,
         "beta_1": 0.5,
         "batch_size": 32,
         "num_epochs": 200
@@ -171,7 +173,6 @@ def main():
     model = PaletteGAN(args=args)
     train(model=model, train_loader=train_dataset, num_epochs=args["num_epochs"])
     print("Training done!")
-
 
     test(model)
     return model
