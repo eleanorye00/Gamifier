@@ -172,3 +172,4 @@ def main():
 
 
     test(model)
+    return model

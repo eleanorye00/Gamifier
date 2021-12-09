@@ -57,82 +57,6 @@ def load_pretrained_embedding(dictionary, embed_file, embed_dim):
     return W_emb
 
 
-class Embed(nn.Module):
-    def __init__(self, vocab_size, embed_dim, W_emb, train_emb):
-        super(Embed, self).__init__()
-        self.embed = nn.Embedding(vocab_size, embed_dim)
-
-        if W_emb is not None:
-            print ("Using pre-trained word embeddings...")
-            self.embed.weight = nn.Parameter(W_emb)
-
-        if train_emb == False:
-            print ("Not training word embeddings...")
-            self.embed.requires_grad = False
-
-    def forward(self, doc):
-        doc = self.embed(doc)
-        return doc
-
-
-# ======================== For processing data ======================== #
-
-def process_palette_ab(pal_data, batch_size):
-    img_a_scale = (pal_data[:, :, 1:2] + 88) / 185
-    img_b_scale = (pal_data[:, :, 2:3] + 127) / 212
-    img_ab_scale = np.concatenate((img_a_scale, img_b_scale), axis=2)
-    ab_for_global = torch.from_numpy(img_ab_scale).float()
-    ab_for_global = ab_for_global.view(batch_size, 10).unsqueeze(2).unsqueeze(2)
-    return ab_for_global
-
-def process_palette_lab(pal_data, batch_size):
-    img_l = pal_data[:, :, 0:1] / 100
-    img_a_scale = (pal_data[:, :, 1:2] + 88) / 185
-    img_b_scale = (pal_data[:, :, 2:3] + 127) / 212
-    img_lab_scale = np.concatenate((img_l, img_a_scale, img_b_scale), axis=2)
-    lab_for_global = torch.from_numpy(img_lab_scale).float()
-    lab_for_global = lab_for_global.view(batch_size, 15).unsqueeze(2).unsqueeze(2)
-    return lab_for_global
-
-def process_global_ab(input_ab, batch_size, always_give_global_hint):
-    X_hist = input_ab
-
-    if always_give_global_hint:
-        B_hist = torch.ones(batch_size, 1, 1, 1)
-    else:
-        B_hist = torch.round(torch.rand(batch_size, 1, 1, 1))
-        for l in range(batch_size):
-            if B_hist[l].numpy() == 0:
-                X_hist[l] = torch.rand(10)
-
-    global_input = torch.cat([X_hist, B_hist], 1)
-    return global_input
-
-def process_global_lab(input_lab, batch_size, always_give_global_hint):
-    X_hist = input_lab
-
-    if always_give_global_hint:
-        B_hist = torch.ones(batch_size, 1, 1, 1)
-    else:
-        B_hist = torch.round(torch.rand(batch_size, 1, 1, 1))
-        for l in range(batch_size):
-            if B_hist[l].numpy() == 0:
-                X_hist[l] = torch.rand(15)
-
-    global_input = torch.cat([X_hist, B_hist], 1)
-    return global_input
-
-
-
-
-
-# ============================= Etc. ============================= #
-def KL_loss(mu, logvar):
-    KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
-    KLD = torch.mean(KLD_element).mul_(-0.5)
-    return KLD
-
-
 def lab2rgb_1d(in_lab, clip=True):
     warnings.filterwarnings("ignore")
     tmp_rgb = lab2rgb(in_lab[np.newaxis, np.newaxis, :], illuminant='D50').flatten()
@@ -140,8 +64,3 @@ def lab2rgb_1d(in_lab, clip=True):
         tmp_rgb = np.clip(tmp_rgb, 0, 1)
     return tmp_rgb
 
-def init_weights_normal(m):
-    if type(m) == nn.Conv1d:
-        m.weight.data.normal_(0.0, 0.05)
-    if type(m) == nn.Linear:
-        m.weight.data.normal_(0.0, 0.05)

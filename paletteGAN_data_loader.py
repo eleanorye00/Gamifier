@@ -74,4 +74,5 @@ def go_through_everything_test():
         batch_idx_list.append(batch_idx)
         a_shape_list.append(txt_embeddings)
         b_shape_list.append(real_palettes)
+
     return batch_idx_list, a_shape_list, b_shape_list
