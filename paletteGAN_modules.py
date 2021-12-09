@@ -115,6 +115,7 @@ def train(model, train_loader, num_epochs=1000):
 
             with tf.GradientTape(persistent=True) as tape:
                 # call, get outputs
+                print("word_ids shape:", word_ids.shape)
                 txt_embeddings = model.encoder(word_ids)
                 fake_palettes = model.generator(txt_embeddings)
                 logits_real = model.discriminator(real_palettes, txt_embeddings)
