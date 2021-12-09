@@ -3,11 +3,12 @@ import warnings
 from skimage.color import lab2rgb, rgb2lab
 import os
 import pickle
-
+import matplotlib.pyplot as plt
 
 # ======================== For text embeddings ======================== #
 SOS_token = 0
 EOS_token = 1
+
 
 class Dictionary:
     def __init__(self):
@@ -31,6 +32,7 @@ class Dictionary:
         else:
             self.word2count[element] += 1
 
+
 def load_pretrained_embedding(dictionary, embed_file, embed_dim):
     if embed_file is None: return None
 
@@ -53,7 +55,7 @@ def load_pretrained_embedding(dictionary, embed_file, embed_dim):
             W_emb[index, :] = pretrained_embed[word]
             n += 1
 
-    print ("%d/%d vocabs are initialized with GloVe embeddings." % (n, vocab_size))
+    print("%d/%d vocabs are initialized with GloVe embeddings." % (n, vocab_size))
     return W_emb
 
 
@@ -65,4 +67,17 @@ def lab2rgb_1d(in_lab, clip=True):
     return tmp_rgb
 
 
-
+def display_palette(GAN_output, word: str, set_title=True):
+    """
+    Display the generated palette along with the input word.
+    :param GAN_output: an Numpy array of 1x15, containing rgb values for the 5 colors but normalized to 0-1.
+    :return: none.
+    """
+    GAN_output *= 255
+    GAN_output = GAN_output.reshape(5, 3)
+    I = np.array([[0, 1, 2, 3, 4]])
+    RGB = GAN_output[I]
+    plt.imshow(RGB)
+    if set_title:
+        plt.title('word')
+    plt.savefig(os.path.join('./paletteGAN_outputs', 'word.png'))
