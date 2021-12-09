@@ -57,9 +57,10 @@ class Discriminator(tf.keras.Model):
 class PaletteGAN():
     def __init__(self, args):
         self.args = args
-        self.encoder = tf.keras.layers.Embedding(1, args["c_dim"],
+        """self.encoder = tf.keras.layers.Embedding(1, args["c_dim"],
                                                  embeddings_initializer=tf.keras.initializers.Constant(args["W_emb"]),
-                                                 trainable=False)
+                                                 trainable=False)"""
+        self.embeddings = args["W_emb"]
         self.generator = Generator(args["c_dim"]) # generator takes in "c" which is 1x300
         self.discriminator = Discriminator(args["palette_dim"], args["c_dim"])
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=args["lr"], beta_1=args["beta_1"])
@@ -116,7 +117,8 @@ def train(model, train_loader, num_epochs=1000):
             with tf.GradientTape(persistent=True) as tape:
                 # call, get outputs
                 print("word_ids shape:", word_ids.shape)
-                txt_embeddings = model.encoder(word_ids)
+                # txt_embeddings = model.encoder(word_ids)
+                txt_embeddings = tf.nn.embedding_lookup(model.embeddings, word_ids)
                 fake_palettes = model.generator(txt_embeddings)
                 logits_real = model.discriminator(real_palettes, txt_embeddings)
                 logits_fake = model.discriminator(fake_palettes, txt_embeddings)
