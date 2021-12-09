@@ -67,10 +67,11 @@ def lab2rgb_1d(in_lab, clip=True):
     return tmp_rgb
 
 
-def display_palette(GAN_output, word: str, set_title=True):
+def display_palette(GAN_output, word: str, save_to_local=True, set_title=True):
     """
     Display the generated palette along with the input word.
     :param GAN_output: an Numpy array of 1x15, containing rgb values for the 5 colors but normalized to 0-1.
+    :param word: the input to generator. Used here as the title for generated plot.
     :return: none.
     """
     GAN_output *= 255
@@ -80,4 +81,5 @@ def display_palette(GAN_output, word: str, set_title=True):
     plt.imshow(RGB)
     if set_title:
         plt.title(word)
-    plt.savefig(os.path.join('./paletteGAN_outputs', word+'.png'))
+    if save_to_local:
+        plt.savefig(os.path.join('./paletteGAN_outputs', word+'.png'))
