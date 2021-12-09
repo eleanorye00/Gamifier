@@ -1,49 +1,12 @@
-
-import pickle
 import os
-import numpy as np
-from skimage.color import rgb2lab
+import pickle
 import warnings
-from paletteGAN_utils import *
 
-class PAT_Dataset(data.Dataset):
-    def __init__(self, src_path, trg_path, input_dict):
-        with open(src_path, 'rb') as fin:
-            self.src_seqs = pickle.load(fin)
-        with open(trg_path, 'rb') as fin:
-            self.trg_seqs = pickle.load(fin)
+import numpy as np
+import tensorflow as tf
+from skimage.color import rgb2lab
 
-        words_index = []
-        for index, palette_name in enumerate(self.src_seqs):
-            temp = [0] * input_dict.max_len
-
-            for i, word in enumerate(palette_name):
-                temp[i] = input_dict.word2index[word]
-            words_index.append(temp)
-        self.src_seqs = torch.LongTensor(words_index)
-
-        palette_list = []
-        for index, palettes in enumerate(self.trg_seqs):
-            temp = []
-            for palette in palettes:
-                rgb = np.array([palette[0], palette[1], palette[2]]) / 255.0
-                warnings.filterwarnings("ignore")
-                lab = rgb2lab(rgb[np.newaxis, np.newaxis, :], illuminant='D50').flatten()
-                temp.append(lab[0])
-                temp.append(lab[1])
-                temp.append(lab[2])
-            palette_list.append(temp)
-
-        self.trg_seqs = torch.FloatTensor(palette_list)
-        self.num_total_seqs = len(self.src_seqs)
-
-    def __getitem__(self, index):
-        src_seq = self.src_seqs[index]
-        trg_seq = self.trg_seqs[index]
-        return src_seq, trg_seq
-
-    def __len__(self):
-        return self.num_total_seqs
+from paletteGAN_utils import Dictionary
 
 
 def prepare_dict():
@@ -61,98 +24,54 @@ def prepare_dict():
     return input_dict
 
 
-def t2p_loader(batch_size, input_dict):
+def t2p_loader(batch_size):
+    input_dict = prepare_dict()
     train_src_path = os.path.join('./data/hexcolor_vf/train_names.pkl')
     train_trg_path = os.path.join('./data/hexcolor_vf/train_palettes_rgb.pkl')
-    val_src_path = os.path.join('./data/hexcolor_vf/test_names.pkl')
-    val_trg_path = os.path.join('./data/hexcolor_vf/test_palettes_rgb.pkl')
 
-    train_dataset = PAT_Dataset(train_src_path, train_trg_path, input_dict)
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=batch_size,
-                                               num_workers=2,
-                                               drop_last=True,
-                                               shuffle=True)
+    with open(train_src_path, 'rb') as fin:
+        src_seqs = pickle.load(fin)
+    with open(train_trg_path, 'rb') as fin:
+        trg_seqs = pickle.load(fin)
 
-    test_dataset = PAT_Dataset(val_src_path, val_trg_path, input_dict)
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                             batch_size=batch_size,
-                                             num_workers=2,
-                                             drop_last=True,
-                                             shuffle=False)
+    words_index = []  # Going to be a list of 1 to 4xxx.
+    word_id_to_palette_id = {}
+    for index, palette_name in enumerate(src_seqs):
+        for word in palette_name:
+            word_id = input_dict.word2index[word]
+            if word_id not in word_id_to_palette_id.keys():
+                word_id_to_palette_id[word_id] = index
+                words_index.append(word_id)
+    src_seqs = tf.convert_to_tensor(words_index, dtype=tf.float32)
 
-    return train_loader, test_loader
+    palette_list = []
+    for i in words_index:
+        palette_id = word_id_to_palette_id[i]
+        palette = trg_seqs[palette_id]
+        temp = []
+        for color in palette:
+            rgb = np.array([color[0], color[1], color[2]]) / 255.0
+            warnings.filterwarnings("ignore")
+            lab = rgb2lab(rgb[np.newaxis, np.newaxis, :], illuminant='D50').flatten()
+            temp.append(lab[0])
+            temp.append(lab[1])
+            temp.append(lab[2])
+        palette_list.append(temp)
+    trg_seqs = tf.convert_to_tensor(palette_list, dtype=tf.float32)
 
+    data_tuple = (src_seqs, trg_seqs)
+    dataset = tf.data.Dataset.from_tensor_slices(data_tuple)
+    dataset_batched = dataset.batch(batch_size=batch_size)
 
-
-
-
-class Test_Dataset(data.Dataset):
-    def __init__(self, input_dict, txt_path, pal_path, img_path, transform=None):
-        self.transform = transform
-        with open(img_path, 'rb') as f:
-            self.images = np.asarray(pickle.load(f)) / 255
-        with open(txt_path, 'rb') as fin:
-            self.src_seqs = pickle.load(fin)
-        with open(pal_path, 'rb') as fin:
-            self.trg_seqs = pickle.load(fin)
-
-        # ==================== Preprocessing src_seqs ====================#
-        # Return a list of indexes, one for each word in the sentence.
-        words_index = []
-        for index, palette_name in enumerate(self.src_seqs):
-            # Set list size to the longest palette name.
-            temp = [0] * input_dict.max_len
-            for i, word in enumerate(palette_name):
-                temp[i] = input_dict.word2index[word]
-            words_index.append(temp)
-
-        self.src_seqs = torch.LongTensor(words_index)
-
-        # ==================== Preprocessing trg_seqs ====================#
-        palette_list = []
-        for palettes in self.trg_seqs:
-            temp = []
-            for palette in palettes:
-                rgb = np.array([palette[0], palette[1], palette[2]]) / 255.0
-                warnings.filterwarnings("ignore")
-                lab = rgb2lab(rgb[np.newaxis, np.newaxis, :], illuminant='D50').flatten()
-                temp.append(lab[0])
-                temp.append(lab[1])
-                temp.append(lab[2])
-            palette_list.append(temp)
-
-        self.trg_seqs = torch.FloatTensor(palette_list)
-
-        self.num_total_data = len(self.src_seqs)
-
-    def __len__(self):
-        return self.num_total_data
-
-    def __getitem__(self, idx):
-        """Returns one data pair."""
-        text = self.src_seqs[idx]
-        palette = self.trg_seqs[idx]
-        image = self.images[idx]
-        if self.transform:
-            image = self.transform(image)
-
-        return text, palette, image
+    return dataset_batched, input_dict
 
 
-def test_loader(dataset, batch_size, input_dict):
-
-    if dataset == 'bird256':
-
-        txt_path = './data/hexcolor_vf/test_names.pkl'
-        pal_path = './data/hexcolor_vf/test_palettes_rgb.pkl'
-        img_path = './data/bird256/test_palette/test_images_origin.txt'
-
-        test_dataset = Test_Dataset(input_dict, txt_path, pal_path, img_path)
-        test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                                  batch_size=batch_size,
-                                                  shuffle=False,
-                                                  num_workers=2)
-        imsize = 256
-
-    return test_loader, imsize
+def go_through_everything_test():
+    batch_idx_list = []
+    a_shape_list = []
+    b_shape_list = []
+    for batch_idx, (txt_embeddings, real_palettes) in enumerate(t2p_loader(32)):
+        batch_idx_list.append(batch_idx)
+        a_shape_list.append(txt_embeddings)
+        b_shape_list.append(real_palettes)
+    return batch_idx_list, a_shape_list, b_shape_list
