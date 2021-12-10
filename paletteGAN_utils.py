@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 from skimage.color import lab2rgb, rgb2lab
+import tensorflow as tf
 import os
 import pickle
 import matplotlib.pyplot as plt
@@ -66,4 +67,8 @@ def lab2rgb_1d(in_lab, clip=True):
         tmp_rgb = np.clip(tmp_rgb, 0, 1)
     return tmp_rgb
 
-
+def KL_loss(mu, logvar):
+    KLD_element = tf.pow(mu, 2) + tf.math.exp(logvar)
+    KLD_element = (KLD_element * (-1)) + 1 + logvar
+    KLD = tf.reduce_mean(KLD_element) * (-0.5)
+    return KLD
