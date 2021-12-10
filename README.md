@@ -12,4 +12,4 @@ Hence, we present Gamifier: an ensemble program consisting of three deep learnin
 
 
 # Notes
-This is a final project ([View on Devpost](https://devpost.com/software/gamifiers-deep-3d-mesh-generation-for-game-design)) for CS1470 Deep Learning, Fall 2021, Brown University. 
+This is a final project ([view on Devpost](https://devpost.com/software/gamifiers-deep-3d-mesh-generation-for-game-design)) for CS1470 Deep Learning, Fall 2021, Brown University. 
