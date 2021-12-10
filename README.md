@@ -1,5 +1,5 @@
 # Gamifier: An Ensemble Program for the Game Design Process
-_We present the Gamifier ensemble process, combining 3 deep learning models - ThinkerRNN, PolyGen, and PaletteGAN - to generate 3D meshes and color palettes of relevant objects given one word as the user input._
+_We present the Gamifier ensemble program, combining 3 deep learning models - ThinkerRNN, PolyGen, and PaletteGAN - to generate 3D meshes and color palettes of relevant objects given one word as the user input._
 
          
 <img width="940" alt="Screen Shot 2021-12-10 at 7 15 41 AM" src="https://user-images.githubusercontent.com/75775661/145577205-d2edb198-f7f0-4032-899e-b8d09433945a.png">
