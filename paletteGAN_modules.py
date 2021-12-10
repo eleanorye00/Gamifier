@@ -8,24 +8,48 @@ from paletteGAN_utils import *
 
 
 class Generator(tf.keras.Model):
-    def __init__(self, c_dim, hidden_dim):
+    def __init__(self, c_dim, hidden_dim, embeddings):
         super(Generator, self).__init__()
+        self.embeddings = embeddings
         self.leaky_relu = tf.keras.layers.LeakyReLU(0.01)
+        self.c_dim = c_dim
+
+        self.encoder = tf.keras.Sequential()
+        self.encoder.add(tf.keras.layers.Dense(c_dim*2, input_shape=(c_dim,), activation="relu"))
+
         self.model = tf.keras.Sequential()
         self.model.add(tf.keras.layers.Dense(hidden_dim, input_shape=(c_dim,), activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(hidden_dim, activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(hidden_dim, activation=self.leaky_relu))
         self.model.add(tf.keras.layers.Dense(15, activation="relu"))
 
+
+    def reparametrize(self, mu, logvar):
+        epsilon = tf.random.normal(shape=mu.shape)
+        z = mu + (tf.exp(logvar * 0.5) * epsilon)
+        return z
+
+
     @tf.function
-    def call(self, c: tf.Tensor) -> tf.Tensor:
+    def call(self, word_ids: tf.Tensor, given_txt_embeddings=None):
         """Generates a batch of palettes given a tensor of class conditioning vectors.
         Inputs:
-        - x: A [batch_size, input_sz] tensor of noise vectors
+        - word_ids: A [batch_size, 1] tensor of word ids
         Returns:
         TensorFlow Tensor with shape [batch_size, 15], containing the generated colors.
         """
-        return self.model(c)
+        if given_txt_embeddings == None:
+            txt_embeddings = tf.nn.embedding_lookup(self.embeddings, word_ids)
+        else:
+            txt_embeddings = given_txt_embeddings
+
+        x = self.encoder(txt_embeddings)
+        mu = x[:, :self.c_dim]
+        logvar = x[:, self.c_dim:]
+        c = self.reparametrize(mu, logvar)
+        gen_output = self.model(c)
+
+        return gen_output, c, mu, logvar
 
 
 class Discriminator(tf.keras.Model):
@@ -58,12 +82,11 @@ class PaletteGAN():
         """self.encoder = tf.keras.layers.Embedding(1, args["c_dim"],
                                                      embeddings_initializer=tf.keras.initializers.Constant(args["W_emb"]),
                                                      trainable=False)"""
-        self.embeddings = args["W_emb"]
-        self.generator = Generator(args["c_dim"], args["g_hidden_dim"])  # generator takes in "c" which is 1x300
+        self.generator = Generator(args["c_dim"], args["g_hidden_dim"], args["W_emb"])  # generator takes in "c" which is 1x300
         self.discriminator = Discriminator(args["palette_dim"], args["c_dim"], args["d_hidden_dim"])
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=args["lr"], beta_1=args["beta_1"])
 
-    def generator_loss(self, logits_fake, fake_palettes, real_palettes) -> tf.Tensor:
+    def generator_loss(self, logits_fake, fake_palettes, real_palettes, mu, logvar) -> tf.Tensor:
         """Compute the discriminator loss.
         Inputs:
         - logits_fake: Tensor, shape[batch_size, 1], output of discriminator for each fake palette.
@@ -73,8 +96,10 @@ class PaletteGAN():
                                                                         logits=logits_fake))
         huber_critic = tf.keras.losses.Huber()
         smooth_l1_loss = huber_critic(fake_palettes, real_palettes)
-        G_loss = (GAN_loss * self.args["lambda_GAN"]) + (smooth_l1_loss * self.args["lambda_sL1"])
-
+        kl_loss = KL_loss(mu, logvar)
+        G_loss = (GAN_loss * self.args["lambda_GAN"]) + \
+                 (smooth_l1_loss * self.args["lambda_sL1"]) + \
+                 (kl_loss * self.args["lambda_KL"])
         return G_loss
 
     def discriminator_loss(self, logits_fake, logits_real) -> tf.Tensor:
@@ -98,6 +123,7 @@ class PaletteGAN():
             self.optimizer.apply_gradients(zip(gradients, component.trainable_variables))
 
 
+
 def train(model, train_loader, num_epochs=1000):
 
     print('Start training...')
@@ -114,16 +140,13 @@ def train(model, train_loader, num_epochs=1000):
             with tf.GradientTape(persistent=True) as tape:
                 # call, get outputs
                 # print("word_ids shape:", word_ids.shape)
-                # txt_embeddings = model.encoder(word_ids)
-                # txt_embeddings = model.encoder(word_ids)
-                txt_embeddings = tf.nn.embedding_lookup(model.embeddings, word_ids)
-                fake_palettes = model.generator(txt_embeddings)
+                fake_palettes, encoder_output, mu, logvar = model.generator(word_ids)
                 # print("fake:", fake_palettes.shape)
                 # print("txt", txt_embeddings)
-                logits_real = model.discriminator(real_palettes, txt_embeddings)
-                logits_fake = model.discriminator(fake_palettes, txt_embeddings)
+                logits_real = model.discriminator(real_palettes, encoder_output) # txt_embeddings)
+                logits_fake = model.discriminator(fake_palettes, encoder_output) # txt_embeddings)
 
-                g_loss = model.generator_loss(logits_fake, fake_palettes, real_palettes)
+                g_loss = model.generator_loss(logits_fake, fake_palettes, real_palettes, mu, logvar)
                 d_loss = model.discriminator_loss(logits_fake, logits_real)
 
             model.optimize(tape, model.generator, g_loss)
@@ -160,8 +183,17 @@ def display_palette(GAN_output, word: str, save_to_local=True, set_title=True):
     if save_to_local:
         plt.savefig(os.path.join('./paletteGAN_outputs', word+'.png'))
 
+def word_emb_direct_lookup(word: str, file_path:str) -> tf.Tensor:
+    with open(file_path, "r") as f:
+        for line in f.readlines():
+            k, *v = line.strip().split(" ")
+            if k == word:
+                embedding = [float(num) for num in v]
+                return tf.convert_to_tensor(embedding)
+        raise Exception("Word not found in Glove embeddings.")
 
-def test_run(model, inputs, color_scaling=1.8):
+
+def test_run(model, inputs, color_scaling=1):
     """
     Generate palettes from the user-input word.
     :param model: Trained PaletteGAN model
@@ -169,23 +201,25 @@ def test_run(model, inputs, color_scaling=1.8):
     :return: None
     """
     print('Fetching your colour recommendation...')
-    train_dataset, input_dict = t2p_loader(batch_size=32)
+    #train_dataset, input_dict = t2p_loader(batch_size=32)
     recommendations = []
 
     for i in range(len(inputs)):
         word = inputs[i]
         plt.figure(i+1)
-        # dictionary = dict.fromkeys(inputs, word)
-        word_id = input_dict.word2index[word]
-        txt_embeddings = tf.nn.embedding_lookup(model.embeddings, [word_id])
-        colour_recommendation = model.generator(txt_embeddings)
+
+        """# dictionary = dict.fromkeys(inputs, word)
+        word_ids = input_dict.word2index[word]
+        txt_embeddings = tf.nn.embedding_lookup(model.embeddings, [word_id]) ## CHANGE THIS"""
+        given_txt_embedding = word_emb_direct_lookup(word, model.args["embed_file_path"])
+        given_txt_embedding = tf.expand_dims(given_txt_embedding, 0)
+        colour_recommendation, a1, a2, a3 = model.generator(tf.zeros(1), given_txt_embedding)
         c = colour_recommendation.numpy() * color_scaling
         c = c.astype(int)
         print(word, "color rec:", c)
 
         display_palette(c, word, set_title=True, save_to_local=False)
         recommendations.append((word, c))
-
     return recommendations
 
 
@@ -198,14 +232,15 @@ def main():
         "lr": 5e-4,
         "lambda_GAN": 0.1,
         "lambda_sL1": 100,
+        "lambda_KL": 0.5,
         "beta_1": 0.5,
         "batch_size": 32,
-        "num_epochs": 500
+        "num_epochs": 300,
+        "embed_file_path": os.path.join('./data', 'glove.6B.100d.txt')
     }
-    embed_file_path = os.path.join('./data', 'glove.6B.100d.txt')
     train_dataset, input_dict = t2p_loader(batch_size=args["batch_size"])
     args["W_emb"] = load_pretrained_embedding(dictionary=input_dict.word2index,
-                                              embed_file=embed_file_path,
+                                              embed_file=args["embed_file_path"],
                                               embed_dim=args["c_dim"])
     args["n_words"] = len(input_dict.word2index)
     print("n_words:", len(input_dict.word2index))
