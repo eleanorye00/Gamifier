@@ -144,28 +144,48 @@ def train(model, train_loader, num_epochs=1000):
     return model, g_loss_history, d_loss_history
 
 
-def test(model, inputs):
+def display_palette(GAN_output, word: str, save_to_local=True, set_title=True):
     """
-        Generate palettes from the user-input word.
-        :param model: Trained PaletteGAN model
-        :param inputs: list of words
-        :return: None
-        """
+    Display the generated palette along with the input word.
+    :param GAN_output: an Numpy array of 1x15, containing rgb values for the 5 colors but normalized to 0-1.
+    :param word: the input to generator. Used here as the title for generated plot.
+    :return: none.
+    """
+    GAN_output = GAN_output.reshape(5, 3)
+    I = np.array([[0, 1, 2, 3, 4]])
+    RGB = GAN_output[I]
+    plt.imshow(RGB)
+    if set_title:
+        plt.title(word)
+    if save_to_local:
+        plt.savefig(os.path.join('./paletteGAN_outputs', word+'.png'))
+
+
+def test_run(model, inputs, color_scaling=1.8):
+    """
+    Generate palettes from the user-input word.
+    :param model: Trained PaletteGAN model
+    :param inputs: list of words
+    :return: None
+    """
     print('Fetching your colour recommendation...')
-    train_dataset, input_dict = t2p_loader(batch_size=100)
+    train_dataset, input_dict = t2p_loader(batch_size=32)
     recommendations = []
-    for word in inputs:
+
+    for i in range(len(inputs)):
+        word = inputs[i]
+        plt.figure(i+1)
         # dictionary = dict.fromkeys(inputs, word)
         word_id = input_dict.word2index[word]
         txt_embeddings = tf.nn.embedding_lookup(model.embeddings, [word_id])
         colour_recommendation = model.generator(txt_embeddings)
-        print(colour_recommendation)
-        # tensor = tf.constant(colour_recommendation)
-        # tensor = tf.squeeze(tensor)
-        # colour_recommendation = tensor.numpy()
-        # display_palette(colour_recommendation, word, set_title=True)
-        recommendations.append((word, colour_recommendation))
-    # print(recommendations.shape)
+        c = colour_recommendation.numpy() * color_scaling
+        c = c.astype(int)
+        print(word, "color rec:", c)
+
+        display_palette(c, word, set_title=True, save_to_local=False)
+        recommendations.append((word, c))
+
     return recommendations
 
 
