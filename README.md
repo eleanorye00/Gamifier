@@ -1,4 +1,4 @@
-# Gamifier: Deep 3D Mesh Generation for Game Design
+# Gamifier: An Ensemble Program for the Game Design Process
 _We present the Gamifier ensemble process, combining 3 deep learning models - ThinkerRNN, PolyGen, and PaletteGAN - to generate 3D meshes and color palettes of relevant objects given one word as the user input._
 
          
