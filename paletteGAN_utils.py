@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 SOS_token = 0
 EOS_token = 1
 
-
 class Dictionary:
     def __init__(self):
         self.word2index = {}
@@ -66,6 +65,7 @@ def lab2rgb_1d(in_lab, clip=True):
     if clip:
         tmp_rgb = np.clip(tmp_rgb, 0, 1)
     return tmp_rgb
+
 
 def KL_loss(mu, logvar):
     KLD_element = tf.pow(mu, 2) + tf.math.exp(logvar)

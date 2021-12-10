@@ -183,6 +183,7 @@ def display_palette(GAN_output, word: str, save_to_local=True, set_title=True):
     if save_to_local:
         plt.savefig(os.path.join('./paletteGAN_outputs', word+'.png'))
 
+
 def word_emb_direct_lookup(word: str, file_path:str) -> tf.Tensor:
     with open(file_path, "r") as f:
         for line in f.readlines():
