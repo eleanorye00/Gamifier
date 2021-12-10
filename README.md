@@ -3,7 +3,6 @@ _We present the Gamifier ensemble process, combining 3 deep learning models - Th
 
          
 <img width="940" alt="Screen Shot 2021-12-10 at 7 15 41 AM" src="https://user-images.githubusercontent.com/75775661/145577205-d2edb198-f7f0-4032-899e-b8d09433945a.png">
-         _Poster_
 
 
 # Introduction
