@@ -1,4 +1,4 @@
-# Gamifier: An Ensemble Program for the Game Design Process
+# Gamifier: An Ensemble Program for VR Game Design
 _We present the Gamifier ensemble program, combining 3 deep learning models - ThinkerRNN, PolyGen, and PaletteGAN - to generate 3D meshes and color palettes for relevant objects given one word as the input._
 
          
